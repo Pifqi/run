@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Interval Running Timer</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Interval Timer</h1>
+        </header>
+        
+        <main>
+            <div class="timer-container" id="timer-container">
+                <div class="state-label" id="state-label">READY</div>
+                <div class="time-display" id="time-display">60</div>
+                <div class="cycle-count" id="cycle-count">Cycles: 0</div>
+            </div>
+
+            <div class="controls">
+                <button id="start-btn" class="btn primary-btn">START</button>
+                <button id="stop-btn" class="btn danger-btn" disabled>STOP (Ndalo)</button>
+            </div>
+
+            <div id="summary-overlay" class="summary-overlay hidden">
+                <div class="summary-card">
+                    <h2>Workout Complete</h2>
+                    <p id="summary-text">You ran for 0 minutes.</p>
+                    <button id="close-summary-btn" class="btn primary-btn">CLOSE</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
