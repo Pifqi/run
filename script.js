@@ -7,6 +7,8 @@ const timerContainer = document.getElementById('timer-container');
 const summaryOverlay = document.getElementById('summary-overlay');
 const summaryText = document.getElementById('summary-text');
 const closeSummaryBtn = document.getElementById('close-summary-btn');
+const gpsStatus = document.getElementById('gps-status');
+const distanceDisplay = document.getElementById('distance-display');
 
 const RUN_SECONDS = 60;
 const SPRINT_SECONDS = 15;
@@ -17,6 +19,13 @@ let currentState = 'READY'; // READY, RUN, SPRINT
 let timeRemaining = RUN_SECONDS; // Initialize display with RUN_SECONDS
 let totalRunCycles = 0;
 let totalRunSeconds = 0;
+
+// GPS and Tracking
+let watchId = null;
+let lastLat = null;
+let lastLon = null;
+let totalDistanceKm = 0;
+let wakeLock = null;
 
 // AudioContext for synthetic beep
 let audioCtx;
@@ -95,6 +104,86 @@ function tick() {
     }
 }
 
+// Haversine formula to calculate distance between two coordinates in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+}
+
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+    }
+}
+
+function releaseWakeLock() {
+    if (wakeLock !== null) {
+        wakeLock.release().then(() => {
+            wakeLock = null;
+        });
+    }
+}
+
+function handlePosition(position) {
+    const { latitude, longitude, accuracy } = position.coords;
+    
+    // Only use coordinates with reasonable accuracy (< 50 meters)
+    if (accuracy > 50) return;
+
+    if (lastLat !== null && lastLon !== null) {
+        const dist = calculateDistance(lastLat, lastLon, latitude, longitude);
+        totalDistanceKm += dist;
+        distanceDisplay.textContent = `${totalDistanceKm.toFixed(2)} km`;
+    }
+    
+    lastLat = latitude;
+    lastLon = longitude;
+    
+    gpsStatus.textContent = 'GPS: Tracking';
+    gpsStatus.className = 'gps-status active';
+}
+
+function handlePositionError(error) {
+    gpsStatus.textContent = 'GPS: Error';
+    gpsStatus.className = 'gps-status error';
+    console.error('GPS Error:', error);
+}
+
+function startGPS() {
+    if ('geolocation' in navigator) {
+        gpsStatus.textContent = 'GPS: Locating...';
+        gpsStatus.className = 'gps-status';
+        watchId = navigator.geolocation.watchPosition(handlePosition, handlePositionError, {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000
+        });
+    } else {
+        gpsStatus.textContent = 'GPS: Not Supported';
+        gpsStatus.className = 'gps-status error';
+    }
+}
+
+function stopGPS() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+    gpsStatus.textContent = 'GPS: Standby';
+    gpsStatus.className = 'gps-status';
+}
+
 function startTimer() {
     initAudio();
     
@@ -102,6 +191,13 @@ function startTimer() {
         isRunning = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
+        
+        // Reset tracking vars
+        lastLat = null;
+        lastLon = null;
+        
+        requestWakeLock();
+        startGPS();
         
         // Start run cycle immediately
         switchState('RUN');
@@ -116,6 +212,9 @@ function stopTimer() {
         
         startBtn.disabled = false;
         stopBtn.disabled = true;
+        
+        stopGPS();
+        releaseWakeLock();
         
         // Calculate and show summary
         const minutes = Math.floor(totalRunSeconds / 60);
@@ -133,7 +232,7 @@ function stopTimer() {
             timeString = '0 seconds';
         }
         
-        summaryText.innerHTML = `You completed <strong>${totalRunCycles}</strong> full cycles<br>and ran for <strong>${timeString}</strong>.`;
+        summaryText.innerHTML = `You completed <strong>${totalRunCycles}</strong> full cycles<br>ran for <strong>${timeString}</strong><br>and covered <strong>${totalDistanceKm.toFixed(2)} km</strong>.`;
         summaryOverlay.classList.remove('hidden');
         
         // Reset state for next session
@@ -141,6 +240,8 @@ function stopTimer() {
         timeRemaining = RUN_SECONDS;
         totalRunCycles = 0;
         totalRunSeconds = 0;
+        totalDistanceKm = 0;
+        distanceDisplay.textContent = '0.00 km';
         updateDisplay();
     }
 }
